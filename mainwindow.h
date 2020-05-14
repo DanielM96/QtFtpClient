@@ -18,13 +18,15 @@ public:
 private slots:
     void closeApp();
     void aboutApp();
-//    void connectToServer();
+    void connectToServer();
 
     void on_actionAboutApp_triggered();
 
     void on_actionExit_triggered();
 
     void on_actionAboutQt_triggered();
+
+    void on_treeView_clicked(const QModelIndex &index);
 
 private:
     Ui::MainWindow *ui;

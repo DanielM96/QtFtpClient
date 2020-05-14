@@ -8,9 +8,13 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    ui->pushButton_DownloadFile->setEnabled(false);
+    ui->treeView->setSortingEnabled(true);
+    ui->treeView->sortByColumn(0, Qt::AscendingOrder);
 
     // Łączenie sygnałów i slotów z elementami UI
     connect(ui->pushButton_Close, SIGNAL(clicked()), this, SLOT(closeApp()));
+    connect(ui->pushButton_Connect, SIGNAL(clicked()), this, SLOT(connectToServer()));
 //    createActions();
 }
 
@@ -38,6 +42,17 @@ void MainWindow::createActions()
 
 }
 
+// Drzewo
+void MainWindow::connectToServer()
+{
+    QFileSystemModel *fsModel = new QFileSystemModel;
+    fsModel->setRootPath("/");
+    ui->treeView->setModel(fsModel);
+    QModelIndex idx = fsModel->index("/");
+    ui->treeView->setRootIndex(idx);
+    ui->treeView->show();
+}
+
 // Wyświetlenie informacji o programie
 void MainWindow::on_actionAboutApp_triggered()
 {
@@ -54,4 +69,14 @@ void MainWindow::on_actionExit_triggered()
 void MainWindow::on_actionAboutQt_triggered()
 {
     QApplication::aboutQt();
+}
+
+// Akcja po kliknięciu na element w TreeView
+void MainWindow::on_treeView_clicked(const QModelIndex &index)
+{
+    if (index.isValid())
+    {
+        ui->pushButton_DownloadFile->setEnabled(true);
+        // TODO: uzyskanie indeksu i sprawdzenie, czy jest plikiem
+    }
 }
