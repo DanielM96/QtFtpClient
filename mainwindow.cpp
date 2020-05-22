@@ -9,6 +9,11 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
+#ifdef _WIN32
+    ui->pushButton_ParentDir->setIcon(QPixmap(":/images/up.png"));
+    ui->actionExit->setIcon(QPixmap(":/images/close.png"));
+#endif
+
     ui->pushButton_DownloadFile->setEnabled(false);
     ui->treeWidget->setEnabled(false);
     ui->pushButton_ParentDir->setEnabled(false);
@@ -18,9 +23,12 @@ MainWindow::MainWindow(QWidget *parent)
     ui->treeWidget->header()->setStretchLastSection(false);
     ui->treeWidget->setSortingEnabled(true);
 
+    isAlreadyConnected = false;
+
 //    connect(ui->treeWidget, SIGNAL(itemActivated(QTreeWidgetItem* int)), this, SLOT(processItem(QTreeWidgetItem* int)));
     connect(ui->treeWidget, SIGNAL(currentItemChanged(QTreeWidgetItem*, QTreeWidgetItem*)), this, SLOT(enableDownload()));
-    connect(ui->pushButton_Connect, SIGNAL(clicked()), this, SLOT(connectToFTP()));
+    connect(ui->pushButton_Connect, SIGNAL(clicked()), this, SLOT(connectDisconnect()));
+    connect(ui->pushButton_DownloadFile, SIGNAL(clicked()), this, SLOT(downloadFile()));
     connect(ui->pushButton_ParentDir, SIGNAL(clicked()), this, SLOT(goToParent()));
     connect(ui->pushButton_Close, SIGNAL(clicked()), this, SLOT(closeApp()));
 }
@@ -33,15 +41,10 @@ MainWindow::~MainWindow()
 // Łączenie bądź rozłączanie
 void MainWindow::connectDisconnect()
 {
-    if (ftp) {
-        ftp->abort();
-        ftp->deleteLater();
-        ftp = 0;
-        ui->treeWidget->setEnabled(false);
-        ui->pushButton_ParentDir->setEnabled(false);
-        ui->pushButton_DownloadFile->setEnabled(false);
-        ui->pushButton_Connect->setText("Połącz");
-    }
+    if (isAlreadyConnected)
+        disconnectFTP();
+    else
+        connectToFTP();
 }
 
 // Łączenie z serwerem FTP
@@ -56,28 +59,42 @@ void MainWindow::connectToFTP()
     isDirectory.clear();
 
     QString address(ui->lineEdit_address->text());
-    if (address.isEmpty())
+    if (address == "")
         ui->statusBar->showMessage("Adres serwera jest wymagany.", 2000);
 
     QString port_str = ui->lineEdit_port->text();
-    qint16 port;
-    if (port_str.isEmpty())
-        port = 21;
-    else
+    qint16 port = 21;
+    if (port_str != "")
         port = port_str.toInt();
 
     QString username = ui->lineEdit_username->text();
-    if (username.isEmpty())
+    if (username == "")
         ui->statusBar->showMessage("Nazwa użytkownika jest wymagana.", 2000);
 
     QString password = ui->lineEdit_password->text();
 
     ftp->connectToHost(address, port);
-    if (!ftp->login(username, password))
-        QMessageBox::warning(this, "Qt FTP Client", "Nieprawidłowa nazwa użytkownika lub hasło");
-    else {
-        ui->treeWidget->setEnabled(true);
-        ui->pushButton_Connect->setText("Rozłącz");
+    ftp->login(username, password);
+    ui->treeWidget->setEnabled(true);
+}
+
+// Rozłączanie z FTP
+void MainWindow::disconnectFTP()
+{
+    if (ftp) {
+        ftp->abort();
+        ftp->deleteLater();
+        ftp->close();
+        ftp = 0;
+
+        ui->statusBar->showMessage("Pomyślnie wylogowano.");
+        isAlreadyConnected = false;
+        isDirectory.clear();
+        ui->treeWidget->clear();
+        ui->treeWidget->setEnabled(false);
+        ui->pushButton_ParentDir->setEnabled(false);
+        ui->pushButton_DownloadFile->setEnabled(false);
+        ui->pushButton_Connect->setText("Połącz");
     }
 }
 
@@ -112,6 +129,7 @@ void MainWindow::processItem(QTreeWidgetItem *item, int)
         ftp->cd(name);
         ftp->list();
         ui->pushButton_ParentDir->setEnabled(true);
+        return;
     }
 }
 
@@ -137,6 +155,7 @@ void MainWindow::ftpCommandFinished(int, bool error)
     case QFtp::ConnectToHost:
         if (error) {
             ui->statusBar->showMessage("Nie można połączyć się z serwerem.");
+            QMessageBox::warning(this, "Qt FTP Client", "Nie można połączyć się z serwerem");
 //            connectDisconnect();
             return;
         }
@@ -144,9 +163,12 @@ void MainWindow::ftpCommandFinished(int, bool error)
         break;
 
     case QFtp::Login:
-        if (error)
+        if (error) {
             ui->statusBar->showMessage("Nie można się zalogować.");
-        else {
+            QMessageBox::warning(this, "Qt FTP Client", "Błędna nazwa użytkownika lub hasło.");
+        } else {
+            isAlreadyConnected = true;
+            ui->pushButton_Connect->setText("Rozłącz");
             ui->pushButton_DownloadFile->setEnabled(true);
             ui->statusBar->showMessage("Pomyślnie zalogowano.");
             ftp->list();
@@ -174,6 +196,17 @@ void MainWindow::ftpCommandFinished(int, bool error)
         }
         break;
 
+//    case QFtp::Close:
+//        if (error) {
+//            QMessageBox::warning(this, "Qt FTP Client", "Błąd podczas zamykania połączenia.");
+//        } else {
+//            isAlreadyConnected = false;
+//            ui->treeWidget->setEnabled(false);
+//            ui->pushButton_ParentDir->setEnabled(false);
+//            ui->pushButton_DownloadFile->setEnabled(false);
+//            ui->pushButton_Connect->setText("Połącz");
+//        }
+
     default:
         ;
     }
@@ -195,6 +228,17 @@ void MainWindow::enableDownload()
 void MainWindow::downloadFile()
 {
     // TODO
+    QString fileName = ui->treeWidget->currentItem()->text(0);
+    QString fileToDownload = QFileDialog::getSaveFileName(this, "Zapisz plik jako...", fileName);
+
+    file = new QFile(fileToDownload);
+    if (!file->open(QIODevice::WriteOnly)) {
+        QMessageBox::information(this, "Qt FTP Client", "Nie można zapisać pliku");
+        delete file;
+        return;
+    }
+
+    ftp->get(ui->treeWidget->currentItem()->text(0), file);
 }
 
 // Informacje o programie

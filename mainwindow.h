@@ -29,6 +29,7 @@ private slots:
     void connectDisconnect();
     void downloadFile();
     void connectToFTP();
+    void disconnectFTP();
 
     void ftpCommandFinished(int command, bool error);
     void addToList(const QUrlInfo &urlInfo);
@@ -55,5 +56,7 @@ private:
 
     QNetworkSession *networkSession;
     QNetworkConfigurationManager manager;
+
+    bool isAlreadyConnected;
 };
 #endif // MAINWINDOW_H
