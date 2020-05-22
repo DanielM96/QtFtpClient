@@ -13,6 +13,10 @@
   <property name="windowTitle">
    <string>Qt FTP Client</string>
   </property>
+  <property name="windowIcon">
+   <iconset resource="Resources.qrc">
+    <normaloff>:/images/ftp.png</normaloff>:/images/ftp.png</iconset>
+  </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QGridLayout" name="gridLayout">
     <item row="1" column="4">
@@ -215,6 +219,8 @@
   <tabstop>pushButton_DownloadFile</tabstop>
   <tabstop>pushButton_Close</tabstop>
  </tabstops>
- <resources/>
+ <resources>
+  <include location="Resources.qrc"/>
+ </resources>
  <connections/>
 </ui>

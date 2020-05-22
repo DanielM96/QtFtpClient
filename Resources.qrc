@@ -4,5 +4,7 @@
         <file>file.png</file>
         <file>close.png</file>
         <file>up.png</file>
+        <file>ftp.ico</file>
+        <file>ftp.png</file>
     </qresource>
 </RCC>

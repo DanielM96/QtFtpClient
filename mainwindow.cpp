@@ -14,18 +14,21 @@ MainWindow::MainWindow(QWidget *parent)
     ui->actionExit->setIcon(QPixmap(":/images/close.png"));
 #endif
 
+    // Wyłączenie przycisków przed połączeniem z serwerem
     ui->pushButton_DownloadFile->setEnabled(false);
     ui->treeWidget->setEnabled(false);
     ui->pushButton_ParentDir->setEnabled(false);
 
+    // Ustawienie nagłówków i możliwości sortowania w TreeWidget
     ui->treeWidget->setRootIsDecorated(false);
     ui->treeWidget->setHeaderLabels(QStringList() << "Nazwa" << "Rozmiar" << "Data modyfikacji");
     ui->treeWidget->header()->setStretchLastSection(false);
     ui->treeWidget->setSortingEnabled(true);
 
+    // Zmienna określająca, czy nawiązano połączenie z serwerem
     isAlreadyConnected = false;
 
-//    connect(ui->treeWidget, SIGNAL(itemActivated(QTreeWidgetItem* int)), this, SLOT(processItem(QTreeWidgetItem* int)));
+    // Łączenie sygnałów i slotów
     connect(ui->treeWidget, SIGNAL(currentItemChanged(QTreeWidgetItem*, QTreeWidgetItem*)), this, SLOT(enableDownload()));
     connect(ui->pushButton_Connect, SIGNAL(clicked()), this, SLOT(connectDisconnect()));
     connect(ui->pushButton_DownloadFile, SIGNAL(clicked()), this, SLOT(downloadFile()));
@@ -58,24 +61,41 @@ void MainWindow::connectToFTP()
     ui->treeWidget->clear();
     isDirectory.clear();
 
+    bool isAddress = true, isUsername = true;
+
+    // Walidacja pola z adresem serwera
     QString address(ui->lineEdit_address->text());
-    if (address == "")
+    if (address == "") {
         ui->statusBar->showMessage("Adres serwera jest wymagany.", 2000);
+        isAddress = false;
+    }
 
     QString port_str = ui->lineEdit_port->text();
     qint16 port = 21;
     if (port_str != "")
         port = port_str.toInt();
 
+    // Walidacja pola z nazwą użytkownika
     QString username = ui->lineEdit_username->text();
-    if (username == "")
+    if (username == "") {
         ui->statusBar->showMessage("Nazwa użytkownika jest wymagana.", 2000);
+        isUsername = false;
+    }
 
     QString password = ui->lineEdit_password->text();
 
-    ftp->connectToHost(address, port);
-    ftp->login(username, password);
-    ui->treeWidget->setEnabled(true);
+    if (isAddress && isUsername) {
+        ftp->connectToHost(address, port);
+        ftp->login(username, password);
+        ui->treeWidget->setEnabled(true);
+    } else {
+        QString message("Nie można kontynuować, ponieważ:");
+        if (!isAddress)
+            message += "<br><br><b>Nie podano adresu serwera.</b>";
+        if (!isUsername)
+            message += "<br><br><b>Nie podano nazwy użytkownika.</b>";
+        QMessageBox::warning(this, "Qt FTP Client", message);
+    }
 }
 
 // Rozłączanie z FTP
@@ -87,11 +107,14 @@ void MainWindow::disconnectFTP()
         ftp->close();
         ftp = 0;
 
+        // Resetowanie TreeView i powiązanych z nim elementów
         ui->statusBar->showMessage("Pomyślnie wylogowano.");
         isAlreadyConnected = false;
         isDirectory.clear();
         ui->treeWidget->clear();
         ui->treeWidget->setEnabled(false);
+
+        // Resetowanie stanu przycisków
         ui->pushButton_ParentDir->setEnabled(false);
         ui->pushButton_DownloadFile->setEnabled(false);
         ui->pushButton_Connect->setText("Połącz");
@@ -106,6 +129,7 @@ void MainWindow::addToList(const QUrlInfo &urlInfo)
     item->setText(1, QString::number(urlInfo.size()));
     item->setText(2, urlInfo.lastModified().toString("dd.MM.yyyy"));
 
+    // Wyświetlanie ikony folderu bądź pliku w zależności od rodzaju elementu
     QPixmap pixmap(urlInfo.isDir() ? ":/images/dir.png" : ":/images/file.png");
     item->setIcon(0, pixmap);
 
@@ -155,8 +179,7 @@ void MainWindow::ftpCommandFinished(int, bool error)
     case QFtp::ConnectToHost:
         if (error) {
             ui->statusBar->showMessage("Nie można połączyć się z serwerem.");
-            QMessageBox::warning(this, "Qt FTP Client", "Nie można połączyć się z serwerem");
-//            connectDisconnect();
+            QMessageBox::warning(this, "Qt FTP Client", tr("Nie można połączyć się z serwerem.<br>Serwer pod adresem %1:%2 jest nieosiągalny.").arg(ui->lineEdit_address->text(), ui->lineEdit_port->text()));
             return;
         }
         ui->statusBar->showMessage("Pomyślnie połączono.");
@@ -181,7 +204,7 @@ void MainWindow::ftpCommandFinished(int, bool error)
             file->close();
             file->remove();
         } else {
-            ui->statusBar->showMessage("Pobrano plik.");
+            ui->statusBar->showMessage(tr("Pomyślnie pobrano plik %1.").arg(file->fileName()));
             file->close();
         }
         delete file;
@@ -196,23 +219,12 @@ void MainWindow::ftpCommandFinished(int, bool error)
         }
         break;
 
-//    case QFtp::Close:
-//        if (error) {
-//            QMessageBox::warning(this, "Qt FTP Client", "Błąd podczas zamykania połączenia.");
-//        } else {
-//            isAlreadyConnected = false;
-//            ui->treeWidget->setEnabled(false);
-//            ui->pushButton_ParentDir->setEnabled(false);
-//            ui->pushButton_DownloadFile->setEnabled(false);
-//            ui->pushButton_Connect->setText("Połącz");
-//        }
-
     default:
         ;
     }
 }
 
-// Włączenie pobierania, w zależności od tego, czy jest to plik
+// Włączenie pobierania, w zależności od tego, czy bieżącym elementem jest plik
 void MainWindow::enableDownload()
 {
     QTreeWidgetItem *current = ui->treeWidget->currentItem();
@@ -227,7 +239,7 @@ void MainWindow::enableDownload()
 // Pobieranie pliku
 void MainWindow::downloadFile()
 {
-    // TODO
+    // Wyświetlanie okna dialogowego zapisu pliku
     QString fileName = ui->treeWidget->currentItem()->text(0);
     QString fileToDownload = QFileDialog::getSaveFileName(this, "Zapisz plik jako...", fileName);
 
