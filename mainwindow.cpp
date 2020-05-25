@@ -25,6 +25,9 @@ MainWindow::MainWindow(QWidget *parent)
     ui->treeWidget->header()->setStretchLastSection(false);
     ui->treeWidget->setSortingEnabled(true);
 
+    // Ustawienie pola z numerem portu tak, aby przyjmowało tylko liczby całkowite
+    ui->lineEdit_port->setValidator(new QIntValidator(1, 65535, this));
+
     // Zmienna określająca, czy nawiązano połączenie z serwerem
     isAlreadyConnected = false;
 
@@ -59,9 +62,10 @@ void MainWindow::connectToFTP()
     connect(ui->treeWidget, SIGNAL(itemActivated(QTreeWidgetItem*, int)), this, SLOT(processItem(QTreeWidgetItem*, int)));
 
     ui->treeWidget->clear();
+    currentPath.clear();
     isDirectory.clear();
 
-    bool isAddress = true, isUsername = true;
+    bool isAddress = true, isUsername = true, isPort = true;
 
     // Walidacja pola z adresem serwera
     QString address(ui->lineEdit_address->text());
@@ -71,9 +75,11 @@ void MainWindow::connectToFTP()
     }
 
     QString port_str = ui->lineEdit_port->text();
-    qint16 port = 21;
+    int port = 21;
     if (port_str != "")
         port = port_str.toInt();
+    if (port == 0 || port > 65535)
+        isPort = false;
 
     // Walidacja pola z nazwą użytkownika
     QString username = ui->lineEdit_username->text();
@@ -84,17 +90,18 @@ void MainWindow::connectToFTP()
 
     QString password = ui->lineEdit_password->text();
 
-    if (isAddress && isUsername) {
+    if (isAddress && isPort && isUsername) {
         ftp->connectToHost(address, port);
         ftp->login(username, password);
-        ui->treeWidget->setEnabled(true);
     } else {
         QString message("Nie można kontynuować, ponieważ:");
         if (!isAddress)
             message += "<br><br><b>Nie podano adresu serwera.</b>";
+        if (!isPort)
+            message += "<br><br><b>Podany numer portu jest nieprawidłowy.</b>";
         if (!isUsername)
             message += "<br><br><b>Nie podano nazwy użytkownika.</b>";
-        QMessageBox::warning(this, "Qt FTP Client", message);
+        QMessageBox::warning(this, "Qt FTP Client - błąd", message);
     }
 }
 
@@ -104,11 +111,11 @@ void MainWindow::disconnectFTP()
     if (ftp) {
         ftp->abort();
         ftp->deleteLater();
-        ftp->close();
+//        ftp->close();
         ftp = 0;
 
         // Resetowanie TreeView i powiązanych z nim elementów
-        ui->statusBar->showMessage("Pomyślnie wylogowano.");
+        ui->statusBar->showMessage("Pomyślnie wylogowano i rozłączono z serwerem.");
         isAlreadyConnected = false;
         isDirectory.clear();
         ui->treeWidget->clear();
@@ -127,7 +134,7 @@ void MainWindow::addToList(const QUrlInfo &urlInfo)
     QTreeWidgetItem *item = new QTreeWidgetItem;
     item->setText(0, urlInfo.name());
     item->setText(1, QString::number(urlInfo.size()));
-    item->setText(2, urlInfo.lastModified().toString("dd.MM.yyyy"));
+    item->setText(2, urlInfo.lastModified().toString("dd.MM.yyyy HH:mm"));
 
     // Wyświetlanie ikony folderu bądź pliku w zależności od rodzaju elementu
     QPixmap pixmap(urlInfo.isDir() ? ":/images/dir.png" : ":/images/file.png");
@@ -153,7 +160,6 @@ void MainWindow::processItem(QTreeWidgetItem *item, int)
         ftp->cd(name);
         ftp->list();
         ui->pushButton_ParentDir->setEnabled(true);
-        return;
     }
 }
 
@@ -175,30 +181,25 @@ void MainWindow::goToParent()
 // Obsługa komend FTP
 void MainWindow::ftpCommandFinished(int, bool error)
 {
-    switch (ftp->currentCommand()) {
-    case QFtp::ConnectToHost:
+    if (ftp->currentCommand() == QFtp::ConnectToHost) {
         if (error) {
             ui->statusBar->showMessage("Nie można połączyć się z serwerem.");
-            QMessageBox::warning(this, "Qt FTP Client", tr("Nie można połączyć się z serwerem.<br>Serwer pod adresem %1:%2 jest nieosiągalny.").arg(ui->lineEdit_address->text(), ui->lineEdit_port->text()));
-            return;
-        }
-        ui->statusBar->showMessage("Pomyślnie połączono.");
-        break;
-
-    case QFtp::Login:
+            QMessageBox::warning(this, "Qt FTP Client - błąd", tr("Nie można połączyć się z serwerem.<br>Żądany serwer jest nieosiągalny."));
+        } else
+            ui->statusBar->showMessage("Połączono z serwerem.");
+    } else if (ftp->currentCommand() == QFtp::Login) {
         if (error) {
             ui->statusBar->showMessage("Nie można się zalogować.");
-            QMessageBox::warning(this, "Qt FTP Client", "Błędna nazwa użytkownika lub hasło.");
+            QMessageBox::warning(this, "Qt FTP Client - błąd", "Błędna nazwa użytkownika lub hasło.");
         } else {
             isAlreadyConnected = true;
             ui->pushButton_Connect->setText("Rozłącz");
             ui->pushButton_DownloadFile->setEnabled(true);
             ui->statusBar->showMessage("Pomyślnie zalogowano.");
+            ui->treeWidget->setEnabled(true);
             ftp->list();
         }
-        break;
-
-    case QFtp::Get:
+    } else if (ftp->currentCommand() == QFtp::Get) {
         if (error) {
             ui->statusBar->showMessage("Nie można pobrać pliku.");
             file->close();
@@ -209,18 +210,13 @@ void MainWindow::ftpCommandFinished(int, bool error)
         }
         delete file;
         enableDownload();
-
-        break;
-
-    case QFtp::List:
+    } else if (ftp->currentCommand() == QFtp::List) {
         if (isDirectory.isEmpty()) {
             ui->treeWidget->addTopLevelItem(new QTreeWidgetItem(QStringList() << "<pusty katalog>"));
             ui->treeWidget->setEnabled(false);
         }
-        break;
-
-    default:
-        ;
+    } else if (ftp->currentCommand() == QFtp::Close) {
+        ui->statusBar->showMessage("Połączenie zamknięte.");
     }
 }
 
@@ -245,11 +241,10 @@ void MainWindow::downloadFile()
 
     file = new QFile(fileToDownload);
     if (!file->open(QIODevice::WriteOnly)) {
-        QMessageBox::information(this, "Qt FTP Client", "Nie można zapisać pliku");
+        ui->statusBar->showMessage(tr("Anulowano pobieranie pliku %1.").arg(fileName));
         delete file;
         return;
     }
-
     ftp->get(ui->treeWidget->currentItem()->text(0), file);
 }
 
