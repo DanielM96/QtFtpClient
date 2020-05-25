@@ -22,7 +22,10 @@ MainWindow::MainWindow(QWidget *parent)
     // Ustawienie nagłówków i możliwości sortowania w TreeWidget
     ui->treeWidget->setRootIsDecorated(false);
     ui->treeWidget->setHeaderLabels(QStringList() << "Nazwa" << "Rozmiar" << "Data modyfikacji");
-    ui->treeWidget->header()->setStretchLastSection(false);
+    // Ustawienie szerokości kolumn
+    ui->treeWidget->header()->setMinimumSectionSize(100);
+    ui->treeWidget->header()->resizeSection(0, 400);
+    ui->treeWidget->header()->setStretchLastSection(true);
     ui->treeWidget->setSortingEnabled(true);
 
     // Ustawienie pola z numerem portu tak, aby przyjmowało tylko liczby całkowite
@@ -111,7 +114,7 @@ void MainWindow::disconnectFTP()
     if (ftp) {
         ftp->abort();
         ftp->deleteLater();
-//        ftp->close();
+        ftp->close();
         ftp = 0;
 
         // Resetowanie TreeView i powiązanych z nim elementów
