@@ -1,9 +1,11 @@
 # QtFtpClient
 Prosty klient FTP oparty o framework Qt
 
+![Qt FTP Client - Linux](qtftp_linux.png) ![Qt FTP Client - Windows](qtftp_win.png)
+
 # Zależności
 
-QFtp (https://github.com/qt/qtftp)
+* QFtp (https://github.com/qt/qtftp)
 
 Instalacja biblioteki zgodnie z instrukcją w powyższym repozytorium.
 
