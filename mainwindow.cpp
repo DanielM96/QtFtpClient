@@ -33,6 +33,15 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Zmienna określająca, czy nawiązano połączenie z serwerem
     isAlreadyConnected = false;
+    /// Zmienna określająca, czy folder został otwarty
+    /// Wymagana do prawidłowego działania metody processItem w następujących przypadkach:
+    /// 1. Ponowne połączenie z tym samym serwerem
+    /// 2. Połączenie z innym serwerem
+    /// 3. Udane połączenie z serwerem po uprzednim nieudanym
+    ///
+    /// Jeżeli ta zmienna nie zostanie użyta, w każdym z powyższych przypadków, próba przejścia do folderu podrzędnego (w katalogu serwera)
+    /// kończy się błędem naruszenia ochrony pamięci (segmentation fault).
+    isProcessed = false;
 
     // Łączenie sygnałów i slotów
     connect(ui->treeWidget, SIGNAL(currentItemChanged(QTreeWidgetItem*, QTreeWidgetItem*)), this, SLOT(enableDownload()));
@@ -154,15 +163,22 @@ void MainWindow::addToList(const QUrlInfo &urlInfo)
 // Przejście do katalogu
 void MainWindow::processItem(QTreeWidgetItem *item, int)
 {
-    QString name = item->text(0);
-    if (isDirectory.value(name)) {
-        ui->treeWidget->clear();
-        isDirectory.clear();
-        currentPath += '/';
-        currentPath += name;
-        ftp->cd(name);
-        ftp->list();
-        ui->pushButton_ParentDir->setEnabled(true);
+    /// Brak zmiennej isProcessed powoduje, że w omówionych wcześniej przypadkach występuje segmentation fault.
+    /// Do błędu w takim przypadku dochodzi, ponieważ po wykonaniu bloku warunkowego program zamiast wyświetlić listę plików,
+    /// wraca na początek metody i jeszcze raz pobiera nazwę elementu. Tym razem nazwa zawiera także nieokreślone elementy,
+    /// co w następnej instrukcji generuje błąd.
+    if (!isProcessed) {
+        QString name = item->text(0);
+        if (isDirectory.value(name)) {
+            ui->treeWidget->clear();
+            isDirectory.clear();
+            currentPath += '/';
+            currentPath += name;
+            ftp->cd(name);
+            ftp->list();
+            ui->pushButton_ParentDir->setEnabled(true);
+            isProcessed = true;
+        }
     }
 }
 
@@ -179,6 +195,7 @@ void MainWindow::goToParent()
         ftp->cd(currentPath);
     }
     ftp->list();
+    isProcessed = false;
 }
 
 // Obsługa komend FTP
@@ -217,13 +234,14 @@ void MainWindow::ftpCommandFinished(int, bool error)
         if (isDirectory.isEmpty()) {
             ui->treeWidget->addTopLevelItem(new QTreeWidgetItem(QStringList() << "<pusty katalog>"));
             ui->treeWidget->setEnabled(false);
-        }
+        } else
+            isProcessed = false;
     } else if (ftp->currentCommand() == QFtp::Close) {
         ui->statusBar->showMessage("Połączenie zamknięte.");
     }
 }
 
-// Włączenie pobierania, w zależności od tego, czy bieżącym elementem jest plik
+// Włączenie możliwości pobierania w zależności od tego, czy bieżącym elementem jest plik
 void MainWindow::enableDownload()
 {
     QTreeWidgetItem *current = ui->treeWidget->currentItem();

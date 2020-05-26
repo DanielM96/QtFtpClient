@@ -58,5 +58,6 @@ private:
     QNetworkConfigurationManager manager;
 
     bool isAlreadyConnected;
+    bool isProcessed;
 };
 #endif // MAINWINDOW_H

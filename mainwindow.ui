@@ -131,7 +131,7 @@
        <string/>
       </property>
       <property name="placeholderText">
-       <string>21</string>
+       <string>21 (domyślnie)</string>
       </property>
      </widget>
     </item>
